@@ -26,10 +26,6 @@
       "value": false
     },
     {
-      "key": "ENABLE_ADS_ON_BOOK_DETAILS",
-      "value": false
-    },
-    {
       "key": "BOOK_SEARCH_SITES_DATA",
       "value": "[\n  {\n    \"key\": \"snowfl\",\n    \"primarySource\": \"https://snowfl.com\",\n    \"dataParseClassName\": \"Snowfl\",\n    \"siteTitle\": \"Snowfl\",\n    \"searchPath\": \"/\",\n    \"isEnable\": true,\n    \"setIntiVariable\": true,\n    \"sources\": [\n      \"https://snowfl.com\"\n    ]\n  }\n]"
     },
