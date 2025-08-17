@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>x1337_api_script</title>
+    <meta charset="UTF-8" />
+</head>
+<body>
+<h1>x1337_api_script server working</h1>
+<script>
+    // ---- Decode helpers ----
+    function normalizeBase64(b64) {
+      if (typeof b64 !== 'string') return '';
+      let s = b64.replace(/-/g, '+').replace(/_/g, '/');
+      const pad = s.length % 4;
+      if (pad) s += '='.repeat(4 - pad);
+      return s;
+    }
+
+    function decodeBase64UTF8(base64String) {
+      const s = normalizeBase64(base64String);
+      const binaryString = atob(s);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+      return new TextDecoder('utf-8').decode(bytes);
+    }
+
+    function base64EncodeUtf8(str) {
+      const bytes = new TextEncoder().encode(str);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+
+    class Snowfl {
+      // ===== Helpers =====
+      substringBetween(text, startDelimiter, endDelimiter) {
+        if (typeof text !== 'string') return '';
+        const startIndex = text.indexOf(startDelimiter);
+        if (startIndex === -1) return '';
+        const endIndex = text.indexOf(endDelimiter, startIndex + startDelimiter.length);
+        if (endIndex === -1) return '';
+        return text.substring(startIndex + startDelimiter.length, endIndex);
+      }
+
+      generateRandomString(length) {
+        const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        const cryptoObj = globalThis.crypto;
+        if (cryptoObj?.getRandomValues) {
+          const values = new Uint32Array(length);
+          cryptoObj.getRandomValues(values);
+          return Array.from(values).map(v => charset[v % charset.length]).join('');
+        }
+        return Array.from({ length }, () => charset[Math.floor(Math.random() * charset.length)]).join('');
+      }
+
+      // ---- Fetch & extract token from b.min.js ----
+      async setInitVariable(baseUrl) {
+        try {
+          if (!baseUrl) throw new Error('baseUrl is required');
+          if (!window.flutter_inappwebview?.callHandler) throw new Error('flutter_inappwebview not available');
+
+          const jsUrl = new URL('b.min.js', baseUrl).toString();
+          const raw = await window.flutter_inappwebview.callHandler('curlRequest', {
+            url: jsUrl,
+            method: 'GET',
+            runInIsolate: true,
+          });
+
+          // curlRequest: { data: base64Encode(utf8.encode(response?.data ?? "")), statusCode }
+          const data = decodeBase64UTF8(raw.data);
+          if (!data) return { apiTokenForSnowFl: '' };
+
+          let variableName = this.substringBetween(data, 'x="/"+', '+');
+          if (!variableName) {
+            const m = data.match(/([$_A-Za-z][$_A-Za-z0-9]*)\s*=\s*"([^"]+)";/);
+            if (m) variableName = m[1];
+          }
+
+          let apiTokenForSnowFl = '';
+          if (variableName) {
+            apiTokenForSnowFl = this.substringBetween(data, `${variableName}="`, '";');
+          }
+          if (!apiTokenForSnowFl) {
+            const m2 = data.match(/=["']([A-Za-z0-9._-]{8,})["'];?/);
+            if (m2) apiTokenForSnowFl = m2[1];
+          }
+
+          return { apiTokenForSnowFl: apiTokenForSnowFl || '' };
+        } catch {
+          return { apiTokenForSnowFl: '' };
+        }
+      }
+
+      // ---- Search endpoint ----
+      async search(options) {
+        try {
+          const query = (options?.query && options.query.length) ? options.query : 'Q';
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || '{}');
+          const globalVariablesData = JSON.parse(options?.globalVariables || '{}');
+
+          const baseUrl = searchSiteModelData.primarySource || '';
+          const apiToken = globalVariablesData.apiTokenForSnowFl || '';
+          if (!baseUrl || !apiToken) throw new Error('unable to get data');
+
+          const randomTail = this.generateRandomString(8) + '/0/DATE/NONE/1';
+          const path = encodeURIComponent(apiToken) + '/' + encodeURIComponent(query) + '/' + randomTail;
+
+          const baseWithSlash = baseUrl.endsWith('/') ? baseUrl : (baseUrl + '/');
+          let urlStr = new URL(path, baseWithSlash).toString();
+          urlStr += (urlStr.includes('?') ? '&' : '?') + '_=' + Date.now();
+
+          const result = await window.flutter_inappwebview.callHandler('curlRequest', {
+            url: urlStr,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const decodedText = decodeBase64UTF8(result.data);
+          const raw = JSON.parse(decodedText);
+
+          const apiData = [];
+          if (Array.isArray(raw)) {
+              for (const item of raw) {
+                if (item && item.nsfw !== true) {
+                  if (typeof item.magnet === 'string') {
+                    item.magnet = [item.magnet];
+                    if (item.url) item.magnet.push(item.url);
+                  } else if (Array.isArray(item.magnet)) {
+                    if (item.url) item.magnet.push(item.url);
+                  } else {
+                    item.magnet = [];
+                  }
+                  apiData.push(item);
+                }
+              }
+            }
+          return apiData;
+        } catch {
+          throw new Error('unable to get data');
+        }
+      }
+
+      // ---- Get Info ----
+      async getInfo(url, baseUrl, torrentSearchModel, globalVariables) {
+        try {
+          const torrentSearchModelData = JSON.parse(torrentSearchModel || '{}');
+          const globalVariablesData = JSON.parse(globalVariables || '{}');
+
+          const site = torrentSearchModelData.site || '';
+          const siteUri = torrentSearchModelData.url || '';
+          const apiToken = globalVariablesData.apiTokenForSnowFl || '';
+          if (!baseUrl || !apiToken) return { magnet: [] };
+
+          const uri = encodeURIComponent(siteUri || '');
+          const base64Str = base64EncodeUtf8(uri);
+
+          const baseWithSlash = baseUrl.endsWith('/') ? baseUrl : (baseUrl + '/');
+          const api = `${baseWithSlash}${apiToken}/${site}/${base64Str}?_=${Date.now()}`;
+
+          const result = await window.flutter_inappwebview.callHandler('curlRequest', {
+            url: api,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const body = decodeBase64UTF8(result.data);
+          const parsed = JSON.parse(body);
+
+          // Return both parsed.url and siteUri as requested
+          const magnetArr = [];
+          if (parsed?.url) magnetArr.push(parsed.url);
+          if (siteUri) magnetArr.push(siteUri);
+
+          return { magnet: magnetArr };
+        } catch {
+          return { magnet: [] };
+        }
+      }
+    }
+
+    class CseGoogle {
+      parseSuggestions(responseText) {
+        if (typeof responseText !== 'string' || !responseText.length) return [];
+
+        // Strip JSONP callback wrapper: google.sbox.pXX(...)
+        let jsonStr = responseText.replace(/^.*?\(/, "").replace(/\);?$/, "");
+
+        // Strip potential XSSI prefix )]}'
+        jsonStr = jsonStr.replace(/^\)\]\}'\s*/, "");
+
+        try {
+          const data = JSON.parse(jsonStr);
+          const arr = Array.isArray(data?.[1]) ? data[1] : [];
+          return arr.map(item => (Array.isArray(item) ? item[0] : item)).filter(Boolean);
+        } catch {
+          return [];
+        }
+      }
+
+      async fetchSuggestions(query) {
+        try {
+          if (!query) return [];
+          const url =
+            `https://clients1.google.com/complete/search` +
+            `?client=partner-web&hl=en&partnerid=50c5ac9923f4a4b9b&types=t&ds=cse&q=${encodeURIComponent(query)}`;
+
+          if (!window.flutter_inappwebview?.callHandler) {
+            // If the flutter bridge isn't available, fail gracefully
+            return [];
+          }
+
+          const result = await window.flutter_inappwebview.callHandler('curlRequest', {
+            url,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          // curlRequest returns: { data: base64(utf8(response.data)), statusCode }
+          const text = decodeBase64UTF8(result?.data || "");
+          if (!text) return [];
+          return this.parseSuggestions(text);
+        } catch {
+          return [];
+        }
+      }
+    }
+
+</script>
+</body>
+</html>
