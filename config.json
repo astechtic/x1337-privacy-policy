@@ -1,0 +1,41 @@
+{
+  "ADS_DATA": [
+    {
+      "ads_key": "ads_key",
+      "image": "image",
+      "url": "site_url",
+      "show_status": "status",
+      "ads_position": "ads_position"
+    }
+  ],
+  "CONFIG_DATA": [
+    {
+      "key": "SUPPORTING_BUSINESS_AD",
+      "value": "{\n          \"image\": \"https://storage.googleapis.com/univest-applications.appspot.com/pn_images/1753757990225_libgen_icon.png\",\n          \"onImageTapAction\": \"openUrl\",\n          \"enable\": true,\n          \"onImageTapUrl\": \"https://libgen-rs.weebly.com/dl.html?q=P2FjdGlvbj1yb3V0ZSZ1cmw9aG9tZT9pbmRleD0w\"\n        }"
+    },
+    {
+      "key": "ENABLE_ADS_ON_BOOK_DETAILS_INIT",
+      "value": true
+    },
+    {
+      "key": "ENABLE_ADS_ON_SEARCH_INIT",
+      "value": false
+    },
+    {
+      "key": "ENABLE_ADS_ON_EVERY_SEARCH",
+      "value": false
+    },
+    {
+      "key": "ENABLE_ADS_ON_BOOK_DETAILS",
+      "value": false
+    },
+    {
+      "key": "BOOK_SEARCH_SITES_DATA",
+      "value": "[\n  {\n    \"key\": \"snowfl\",\n    \"primarySource\": \"https://snowfl.com\",\n    \"dataParseClassName\": \"Snowfl\",\n    \"siteTitle\": \"Snowfl\",\n    \"searchPath\": \"/\",\n    \"isEnable\": true,\n    \"setIntiVariable\": true,\n    \"sources\": [\n      \"https://snowfl.com\"\n    ]\n  }\n]"
+    },
+    {
+      "key": "ENABLE_INTERSTITIAL_ADS",
+      "value": false
+    }
+  ]
+}
