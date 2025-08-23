@@ -7,6 +7,18 @@
 <body>
 <h1>x1337_api_script server working</h1>
 <script>
+    // Basic name-based NSFW heuristic
+    function isNSFW(name) {
+      if (!name) return false;
+      const s = String(name).toLowerCase();
+      const patterns = [
+        'porn', 'xxx', 'sex', 'hentai', 'nsfw', 'adult', 'erotic', 'hardcore',
+        'xvideos', 'xnxx', 'jav', 'idol', 'brazzers', 'bangbros', 'pornhub', 'masturbate',
+        /\b18\+\b/,
+      ];
+      return patterns.some(p => (p instanceof RegExp ? p.test(s) : s.includes(p)));
+    }
+
     // ---- Decode helpers ----
     function normalizeBase64(b64) {
       if (typeof b64 !== 'string') return '';
@@ -178,6 +190,311 @@
         }
       }
     }
+
+    class RarbgDump {
+      static absoluteUrl(base, href) {
+        try {
+          return new URL(href, base).toString();
+        } catch {
+          return href || '';
+        }
+      }
+
+      // ===== Main search =====
+      async search(options) {
+        const callHandler = window.flutter_inappwebview?.callHandler;
+        if (!callHandler) throw new Error('flutter_inappwebview not available');
+
+        try {
+          // Parse site model
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || '{}');
+
+          const base = searchSiteModelData.primarySource || 'https://rarbgdump.com';
+          const searchPath = searchSiteModelData.searchPath || '/search/{SEARCH_QUERY}';
+          const query = (options?.query && options.query.length) ? options.query : 'book';
+
+          // replace {SEARCH_QUERY} in searchPath
+          const path = searchPath.replace('{SEARCH_QUERY}', encodeURIComponent(query));
+          const url = new URL(path, base).toString();
+
+          const res = await callHandler('curlRequest', {
+            url,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const html = decodeBase64UTF8(res?.data);
+          if (!html) return [];
+
+          // Parse HTML
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+
+          const tbody =
+            doc.querySelector('tbody[class*="[_tr:last-child]:border-0"]') ||
+            doc.querySelector('tbody[class*="border-0"]') ||
+            doc.querySelector('tbody');
+
+          if (!tbody) return [];
+
+          const rows = Array.from(tbody.querySelectorAll('tr'));
+          const results = [];
+
+          for (const tr of rows) {
+            const tds = tr.querySelectorAll('td');
+            if (tds.length < 5) continue;
+
+            // 2nd TD -> name + url
+            const tdName = tds[1];
+            const aName = tdName.querySelector('a');
+            const name = (tdName.textContent || '').trim();
+            const urlRel = aName?.getAttribute('href') || '';
+            const itemUrl = RarbgDump.absoluteUrl(base, urlRel);
+
+            // 3rd TD -> magnet <a>
+            const tdMagnet = tds[2];
+            const magnetA = tdMagnet.querySelector('a[href^="magnet:"]');
+            const magnetLink = magnetA?.getAttribute('href') || '';
+
+            // 4th TD -> size
+            const size = (tds[3].textContent || '').trim();
+
+            // 5th TD -> type
+            const type = (tds[4].textContent || '').trim();
+
+            // Build magnet list
+            const magnetList = [];
+            if (magnetLink) magnetList.push(magnetLink);
+            if (itemUrl) magnetList.push(itemUrl);
+
+            const nsfw = isNSFW(name);
+
+            results.push({
+              magnet: magnetList,
+              source: searchSiteModelData.key || 'rarbgdump',
+              age: "",
+              name,
+              size,
+              seeder: "",
+              leecher: "",
+              type,
+              site: searchSiteModelData.siteTitle || 'RARBG',
+              parentSite: searchSiteModelData.primarySource || 'https://rarbgdump.com',
+              url: itemUrl,
+              trusted: true,
+              description: "",
+              nsfw
+            });
+          }
+
+          return results;
+        } catch {
+          throw new Error('unable to get data');
+        }
+      }
+    }
+
+    class FilePursuit {
+      static absoluteUrl(base, href) {
+        try {
+          return new URL(href, base).toString();
+        } catch {
+          return href || '';
+        }
+      }
+
+      static extractClipboardUrl(onclickVal) {
+        if (!onclickVal) return '';
+        const m = onclickVal.match(/copyToClipboard\(['"]([^'"]+)['"]\)/i);
+        return m ? m[1] : '';
+      }
+
+      async search(options) {
+        const callHandler = window.flutter_inappwebview?.callHandler;
+        if (!callHandler) throw new Error('flutter_inappwebview not available');
+
+        try {
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || '{}');
+
+          const base = searchSiteModelData.primarySource || 'https://filepursuit.com';
+          const searchPath =
+            searchSiteModelData.searchPath ||
+            '/pursuit?q={SEARCH_QUERY}&type=all&sort=datedesc';
+          const query =
+            options?.query && options.query.length ? options.query : 'Flutter book';
+
+          let path = searchPath;
+          if (path.includes('{SEARCH_QUERY}')) {
+            path = path.replace('{SEARCH_QUERY}', encodeURIComponent(query));
+          } else if (!/[?&]q=/.test(path)) {
+            const sep = path.includes('?') ? '&' : '?';
+            path = `${path}${sep}q=${encodeURIComponent(query)}`;
+          }
+          const url = new URL(path, base).toString();
+
+          const res = await callHandler('curlRequest', {
+            url,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const html = decodeBase64UTF8(res?.data);
+          if (!html) return [];
+
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+
+          const allRows = Array.from(doc.querySelectorAll('div.row'));
+          const resultRows = allRows.filter(
+            r => r.querySelector('h5') && r.querySelector('.mr-3.wrap-tight')
+          );
+
+          const items = [];
+
+          for (const row of resultRows) {
+            const h5 = row.querySelector('h5');
+            const name = (h5?.textContent || '').trim();
+
+            const firstA = row.querySelector('a[href]');
+            const pageHref = firstA?.getAttribute('href') || '';
+            const itemUrl = FilePursuit.absoluteUrl(base, pageHref);
+
+            const badgeWrap = row.querySelector('.mr-3.wrap-tight');
+            const spans = badgeWrap ? Array.from(badgeWrap.querySelectorAll('span')) : [];
+
+            const type = spans.length > 0 ? (spans[0].textContent || '').trim() : '';
+            const age = spans.length > 1 ? (spans[1].textContent || '').trim() : '';
+            const size = spans.length > 2 ? (spans[spans.length - 1].textContent || '').trim() : '';
+
+            const badgeCopy = row.querySelector('.badge-wrap a[onclick*="copyToClipboard"]');
+            const directLink = FilePursuit.extractClipboardUrl(
+              badgeCopy?.getAttribute('onclick') || ''
+            );
+
+            const magnet = [];
+            if (directLink) magnet.push(directLink);
+            if (itemUrl) magnet.push(itemUrl);
+
+            items.push({
+              magnet,
+              source: searchSiteModelData.key || 'filepursuit',
+              age,
+              name,
+              size,
+              seeder: "",
+              leecher: "",
+              type,
+              site: searchSiteModelData.siteTitle || 'FilePursuit',
+              parentSite: searchSiteModelData.primarySource || 'https://filepursuit.com',
+              url: itemUrl,
+              trusted: true,
+              description: "",
+              nsfw: (typeof isNSFW === 'function') ? !!isNSFW(name) : false
+            });
+          }
+
+          return items;
+        } catch {
+          throw new Error('unable to get data');
+        }
+      }
+    }
+
+    class Odcrawler {
+      async search(options) {
+        const callHandler = window.flutter_inappwebview?.callHandler;
+        if (!callHandler) throw new Error("flutter_inappwebview not available");
+
+        try {
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || "{}");
+          const query =
+            options?.query && options.query.length ? options.query : "test";
+
+          const apiUrl = "https://search.odcrawler.xyz/elastic/links/_search";
+
+          // Build request body
+          const body = {
+            size: 40,
+            from: 0,
+            highlight: {
+              fields: {
+                url: {},
+                filename: {},
+              },
+            },
+            query: {
+              bool: {
+                must: [
+                  {
+                    match_phrase: { url: query },
+                  },
+                ],
+                should: [
+                  {
+                    match_phrase: { filename: query },
+                  },
+                ],
+                must_not: [
+                  {
+                    terms: {
+                      extension: ["html", "HTML"],
+                    },
+                  },
+                ],
+              },
+            },
+          };
+
+          // Make POST request
+          const res = await callHandler("curlRequest", {
+            url: apiUrl,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+            runInIsolate: true,
+          });
+
+          const decodedText = decodeBase64UTF8(res?.data);
+          if (!decodedText) return [];
+
+          const json = JSON.parse(decodedText);
+          const hits = json?.hits?.hits || [];
+
+          const items = hits.map((hit) => {
+            const src = hit?._source || {};
+            const url = src.url || "";
+            const filename = src.filename || "";
+            const extension = src.extension || "";
+
+            return {
+              magnet: url ? [url] : [],
+              source: searchSiteModelData.key || "odcrawler",
+              age: "",
+              name: filename,
+              size: "",
+              seeder: "",
+              leecher: "",
+              type: extension,
+              site: searchSiteModelData.siteTitle || "Odcrawler",
+              parentSite:
+                searchSiteModelData.primarySource || "https://odcrawler.xyz",
+              url,
+              trusted: true,
+              description: "",
+              nsfw:
+                typeof isNSFW === "function"
+                  ? !!isNSFW(filename || url)
+                  : false,
+            };
+          });
+
+          return items;
+        } catch (e) {
+          throw new Error("unable to get data");
+        }
+      }
+    }
+
 
     class CseGoogle {
       parseSuggestions(responseText) {
