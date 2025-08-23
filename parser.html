@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-    <title>x1337_api_script</title>
-    <meta charset="UTF-8" />
+  <title>x1337_api_script</title>
+  <meta charset="UTF-8" />
 </head>
+
 <body>
-<h1>x1337_api_script server working</h1>
-<script>
+  <h1>x1337_api_script server working</h1>
+  <script>
     // Basic name-based NSFW heuristic
     function isNSFW(name) {
       if (!name) return false;
@@ -132,21 +134,21 @@
 
           const apiData = [];
           if (Array.isArray(raw)) {
-              for (const item of raw) {
-                if (item && item.nsfw !== true) {
-                  if (typeof item.magnet === 'string') {
-                    item.magnet = [item.magnet];
-                    if (item.url) item.magnet.push(item.url);
-                  } else if (Array.isArray(item.magnet)) {
-                    if (item.url) item.magnet.push(item.url);
-                  } else {
-                    item.magnet = [];
-                  }
-                  item.parentSite = "https://snowfl.com";
-                  apiData.push(item);
+            for (const item of raw) {
+              if (item && item.nsfw !== true) {
+                if (typeof item.magnet === 'string') {
+                  item.magnet = [item.magnet];
+                  if (item.url) item.magnet.push(item.url);
+                } else if (Array.isArray(item.magnet)) {
+                  if (item.url) item.magnet.push(item.url);
+                } else {
+                  item.magnet = [];
                 }
+                item.parentSite = "https://snowfl.com";
+                apiData.push(item);
               }
             }
+          }
           return apiData;
         } catch {
           throw new Error('unable to get data');
@@ -543,6 +545,229 @@
       }
     }
 
-</script>
+    class GoogleSearch {
+      // --- Helpers ---
+      _ensureBridge() {
+        if (!window.flutter_inappwebview?.callHandler) {
+          throw new Error('BRIDGE_MISSING: flutter_inappwebview not available');
+        }
+        if (typeof decodeBase64UTF8 !== 'function') {
+          throw new Error('B64_DECODER_MISSING: decodeBase64UTF8 is not defined');
+        }
+      }
+
+      _decodeResponse(res) {
+        if (!res || typeof res.statusCode !== 'number') {
+          throw new Error('NO_STATUS');
+        }
+        // (Optional) check for non-2xx if your bridge provides status codes
+        // if (res.statusCode < 200 || res.statusCode >= 300) {
+        //   throw new Error(`HTTP_${res.statusCode}`);
+        // }
+        const text = decodeBase64UTF8(res.data || '');
+        if (!text) throw new Error('EMPTY_BODY');
+        return text;
+      }
+
+      _extractOptsObject(jsText) {
+        // The script is an IIFE like: (function(opts_){ ... })( { ... } );
+        // Grab the final object literal passed to the IIFE.
+        const m = jsText.match(/\}\)\(\s*({[\s\S]*?})\s*\);?/);
+        if (!m) return null;
+        const candidate = m[1];
+
+        // In current payload it’s already valid JSON (double-quoted keys/strings).
+        // But guard in case minification adds stray trailing commas (basic cleanup).
+        const cleaned = candidate
+          // remove trailing commas before } or ]
+          .replace(/,\s*([}\]])/g, '$1');
+
+        try {
+          return JSON.parse(cleaned);
+        } catch {
+          // Fallback: targeted regex extraction if parsing fails.
+          const token = (jsText.match(/"cse_token"\s*:\s*"([^"]+)"/) || [])[1] || '';
+          const cselibVersion = (jsText.match(/"cselibVersion"\s*:\s*"([^"]+)"/) || [])[1] || '';
+          const expRaw = (jsText.match(/"exp"\s*:\s*\[([\s\S]*?)\]/) || [])[1] || '';
+          const exp = expRaw
+            ? expRaw.split(',').map(s => s.replace(/[\s"']/g, '')).filter(Boolean)
+            : [];
+          return { cse_token: token, cselibVersion, exp };
+        }
+      }
+
+      // --- Main: fetch & extract from Google CSE bootstrap ---
+      async setInitVariable(baseUrl) {
+        try {
+          this._ensureBridge();
+
+          // Build the URL. If baseUrl is provided, use it as origin; otherwise use the default endpoint.
+          // Example: baseUrl = 'https://cse.google.com/'
+          let jsUrl = 'https://cse.google.com/cse.js?cx=50c5ac9923f4a4b9b';
+          if (baseUrl) {
+            try {
+              jsUrl = new URL('cse.js?cx=50c5ac9923f4a4b9b', baseUrl).toString();
+            } catch {
+              // If baseUrl is malformed, fall back to default
+            }
+          }
+
+          const raw = await window.flutter_inappwebview.callHandler('curlRequest', {
+            url: jsUrl,
+            method: 'GET',
+            runInIsolate: true,
+          });
+
+          const body = this._decodeResponse(raw);
+          const opts = this._extractOptsObject(body) || {};
+
+          const cse_token_for_google_search = opts.cse_token || '';
+          const exp_for_google_search = Array.isArray(opts.exp) ? opts.exp : [];
+          const cselibVersion_for_google_search = opts.cselibVersion || '';
+
+          return {
+            cse_token_for_google_search,
+            exp_for_google_search,
+            cselibVersion_for_google_search,
+          };
+        } catch {
+          return {
+            cse_token_for_google_search: '',
+            exp_for_google_search: [],
+            cselibVersion_for_google_search: '',
+          };
+        }
+      }
+
+      // ---- Search (Google CSE) ----
+      async search(options) {
+        // small helpers local to this method
+        const safeJsonParse = (s) => { try { return JSON.parse(s || '{}'); } catch { return {}; } };
+        const ensureBridge = () => {
+          if (!window.flutter_inappwebview?.callHandler) {
+            throw new Error('BRIDGE_MISSING: flutter_inappwebview not available');
+          }
+          if (typeof decodeBase64UTF8 !== 'function') {
+            throw new Error('B64_DECODER_MISSING: decodeBase64UTF8 is not defined');
+          }
+        };
+        const decodeBody = (res) => {
+          if (!res) throw new Error('NO_RESPONSE');
+          const txt = decodeBase64UTF8(res.data || '');
+          if (!txt) throw new Error('EMPTY_BODY');
+          return txt;
+        };
+        const buildUrl = (params) => {
+          const u = new URL('https://cse.google.com/cse/element/v1');
+          Object.entries(params).forEach(([k, v]) => {
+            if (v === undefined || v === null) return;
+            // arrays (exp) -> comma-separated
+            if (Array.isArray(v)) u.searchParams.set(k, v.join(','));
+            else u.searchParams.set(k, String(v));
+          });
+          u.searchParams.set('_', Date.now().toString()); // cache buster
+          return u.toString();
+        };
+        const parseJsonp = (text) => {
+          // Matches: google.search.cse.apiNNNNN({...});
+          const m = text.match(/google\.search\.cse\.\w+\s*\(\s*([\s\S]*?)\s*\)\s*;?\s*$/);
+          if (!m) return null;
+          const jsonStr = m[1]
+            // strip any trailing commas just in case
+            .replace(/,\s*([}\]])/g, '$1');
+          try { return JSON.parse(jsonStr); } catch { return null; }
+        };
+
+        try {
+          ensureBridge();
+
+          const query = (options?.query ?? '').toString().trim();
+          const searchSiteModelData = safeJsonParse(options?.searchSiteModel) || {};
+          const globalVariablesData = safeJsonParse(options?.globalVariables) || {};
+
+          const CSE_LIB = (globalVariablesData.cselibVersion_for_google_search || '').trim();
+          const CSE_TOKEN = (globalVariablesData.cse_token_for_google_search || '').trim();
+          // exp can be array or string; normalize to array of strings
+          const expArr = Array.isArray(globalVariablesData.exp_for_google_search)
+            ? globalVariablesData.exp_for_google_search.map(String)
+            : (globalVariablesData.exp_for_google_search ? String(globalVariablesData.exp_for_google_search).split(',') : []);
+
+          if (!CSE_LIB || !CSE_TOKEN) {
+            throw new Error('CONFIG_MISSING: cselibVersion_for_google_search or cse_token_for_google_search');
+          }
+
+          const params = {
+            rsz: 'filtered_cse',
+            num: '100',
+            hl: 'en',
+            cselibv: CSE_LIB,
+            cx: '50c5ac9923f4a4b9b',
+            q: query,
+            safe: 'active',
+            cse_tok: CSE_TOKEN,
+            exp: expArr, // will be joined with commas
+            callback: 'google.search.cse.api18151',
+            rurl: 'https://www.dedigger.com/#gsc.tab=0',
+          };
+
+          const urlStr = buildUrl(params);
+
+          const result = await window.flutter_inappwebview.callHandler('curlRequest', {
+            url: urlStr,
+            method: 'GET',
+            runInIsolate: true,
+          });
+
+          const body = decodeBody(result);
+          const parsed = parseJsonp(body);
+          const items = Array.isArray(parsed?.results) ? parsed.results : [];
+
+          const site = searchSiteModelData.siteTitle || 'GoogleSearch';
+          const parentSite = searchSiteModelData.primarySource || 'https://cse.google.com';
+          const source = searchSiteModelData.key || 'googlesearch';
+
+          const out = [];
+          for (const it of items) {
+            const name = it?.titleNoFormatting || it?.title || '';
+            const unescapedUrl = it?.unescapedUrl || '';
+            const clicktrackUrl = it?.clicktrackUrl || '';
+            const altUrl = it?.url || '';
+            const description = it?.contentNoFormatting || it?.content || '';
+            const type = it?.fileFormat || '';
+
+            // magnet should contain unescapedUrl, clicktrackUrl, url (deduped, non-empty)
+            const magnet = Array.from(new Set([unescapedUrl, clicktrackUrl, altUrl].filter(Boolean)));
+
+            out.push({
+              // TorrentSearchModel fields
+              magnet,
+              source,
+              age: '',          // not available in CSE payload
+              name,
+              size: '',         // not available in CSE payload
+              seeder: '',       // not available in CSE payload
+              leecher: '',      // not available in CSE payload
+              type,
+              site,
+              parentSite,
+              url: unescapedUrl || altUrl || clicktrackUrl || '',
+              trusted: true,
+              description,
+              nsfw: false,
+            });
+          }
+
+          return out;
+        } catch (e) {
+          // align with your other classes: throw a generic error message
+          throw new Error('unable to get data');
+        }
+      }
+
+    }
+
+
+  </script>
 </body>
+
 </html>
