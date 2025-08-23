@@ -12,13 +12,26 @@
     // Basic name-based NSFW heuristic
     function isNSFW(name) {
       if (!name) return false;
-      const s = String(name).toLowerCase();
-      const patterns = [
+    
+      // Normalize input
+      const s = String(name).toLowerCase().trim();
+    
+      // Expanded keyword list
+      const keywords = [
         'porn', 'xxx', 'sex', 'hentai', 'nsfw', 'adult', 'erotic', 'hardcore',
         'xvideos', 'xnxx', 'jav', 'idol', 'brazzers', 'bangbros', 'pornhub', 'masturbate',
-        /\b18\+\b/,
+        'fuck', 'fucking', 'shag', 'shagged', 'screw', 'slut', 'whore', 'milf', 'creampie',
+        'blowjob', 'handjob', 'gangbang', 'anal', 'deepthroat', 'cumshot', 'nude',
+        'strip', 'hookup', 'booty', 'pussy', 'cock', 'dick', 'tits', 'boobs'
       ];
-      return patterns.some(p => (p instanceof RegExp ? p.test(s) : s.includes(p)));
+    
+      // Build a regex with boundaries
+      const nsfwRegex = new RegExp(
+        `\\b(?:${keywords.join('|')})\\b|18\\+`,
+        'i'
+      );
+    
+      return nsfwRegex.test(s);
     }
 
     // ---- Decode helpers ----
