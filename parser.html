@@ -779,6 +779,121 @@
 
     }
 
+    class Btdig {
+      static absoluteUrl(base, href) {
+        try {
+          return new URL(href, base).toString();
+        } catch {
+          return href || '';
+        }
+      }
+    
+      async search(options) {
+        const callHandler = window.flutter_inappwebview?.callHandler;
+        if (!callHandler) throw new Error('flutter_inappwebview not available');
+    
+        try {
+          // Parse site model
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || '{}');
+    
+          const base = searchSiteModelData.primarySource || 'https://btdig.com';
+          const searchPath =
+            searchSiteModelData.searchPath || '/search?order=0&q={SEARCH_QUERY}';
+          const query =
+            options?.query && options.query.length ? options.query : 'book';
+    
+          // Build URL
+          const path = searchPath.replace('{SEARCH_QUERY}', encodeURIComponent(query));
+          const url = new URL(path, base).toString();
+    
+          // Fetch HTML via Flutter in-app webview bridge
+          const res = await callHandler('curlRequest', {
+            url,
+            method: 'GET',
+            runInIsolate: true
+          });
+    
+          const html = decodeBase64UTF8(res?.data);
+          if (!html) return [];
+    
+          // Parse HTML
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+    
+          // Strict container per spec:
+          // <div class="one_result" style="display:table-row;background-color:#e8e8e8">
+          const items = Array.from(
+            doc.querySelectorAll(
+              'div.one_result[style*="display:table-row"][style*="background-color:#e8e8e8"]'
+            )
+          );
+    
+          if (!items.length) return [];
+    
+          const results = [];
+    
+          for (const item of items) {
+            // Title + URL
+            const nameDiv =
+              item.querySelector('div.torrent_name[style="display:table-cell"]') ||
+              item.querySelector('div.torrent_name[style*="display:table-cell"]') ||
+              item.querySelector('div.torrent_name[style]');
+            const aName = nameDiv?.querySelector('a');
+            const rawName = (nameDiv?.textContent || '').trim();
+            const name = rawName.replace(/\s+/g, ' ');
+            const urlRel = aName?.getAttribute('href') || '';
+            const itemUrl = Btdig.absoluteUrl(base, urlRel);
+    
+            // Size
+            const sizeSpan =
+              item.querySelector('span.torrent_size[style="color:#666;padding-left:10px"]') ||
+              item.querySelector('span.torrent_size[style*="padding-left:10px"]') ||
+              item.querySelector('span.torrent_size[style]');
+            const size = (sizeSpan?.innerText || sizeSpan?.textContent || '').trim();
+    
+            // Age
+            const ageSpan =
+              item.querySelector('span.torrent_age[style*="padding-left:10px"]') ||
+              item.querySelector('span.torrent_age[style]');
+            const age = (ageSpan?.innerText || ageSpan?.textContent || '').trim();
+    
+            // Magnet(s)
+            const magnetDiv =
+              item.querySelector('div.torrent_magnet[style="display:table-cell"]') ||
+              item.querySelector('div.torrent_magnet[style*="display:table-cell"]') ||
+              item.querySelector('div.torrent_magnet[style]');
+            const magnetA = magnetDiv?.querySelector('a[href^="magnet:"]');
+            const magnetLink = magnetA?.getAttribute('href') || '';
+    
+            const magnet = [];
+            if (magnetLink) magnet.push(magnetLink);
+            if (itemUrl) magnet.push(itemUrl);
+    
+            const nsfw = (typeof isNSFW === 'function') ? !!isNSFW(name) : false;
+    
+            results.push({
+              magnet,
+              source: searchSiteModelData.key || 'btdig',
+              age,
+              name,
+              size,
+              seeder: '',
+              leecher: '',
+              type: '',
+              site: searchSiteModelData.siteTitle || 'Btdig',
+              parentSite: searchSiteModelData.primarySource || 'https://btdig.com',
+              url: itemUrl,
+              trusted: true,
+              description: '',
+              nsfw
+            });
+          }
+    
+          return results;
+        } catch {
+          throw new Error('unable to get data');
+        }
+      }
+    }
 
   </script>
 </body>
