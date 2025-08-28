@@ -11,7 +11,7 @@
   "CONFIG_DATA": [
     {
       "key": "SUPPORTING_BUSINESS_AD",
-      "value": "{\n          \"image\": \"https://storage.googleapis.com/univest-applications.appspot.com/pn_images/1753757990225_libgen_icon.png\",\n          \"onImageTapAction\": \"openUrl\",\n          \"enable\": false,\n          \"onImageTapUrl\": \"https://libgen-rs.weebly.com/dl.html?q=P2FjdGlvbj1yb3V0ZSZ1cmw9aG9tZT9pbmRleD0w\"\n        }"
+      "value": "{\n          \"image\": \"https://storage.googleapis.com/univest-applications.appspot.com/pn_images/1753757990225_libgen_icon.png\",\n          \"onImageTapAction\": \"openUrl\",\n          \"enable\": true,\n          \"onImageTapUrl\": \"https://libgen-rs.weebly.com/dl.html?q=P2FjdGlvbj1yb3V0ZSZ1cmw9aG9tZT9pbmRleD0w\"\n        }"
     },
     {
       "key": "ENABLE_ADS_ON_BOOK_DETAILS_INIT",
