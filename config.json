@@ -15,7 +15,7 @@
     },
     {
       "key": "ENABLE_ADS_ON_BOOK_DETAILS_INIT",
-      "value": true
+      "value": false
     },
     {
       "key": "ENABLE_ADS_ON_SEARCH_INIT",
