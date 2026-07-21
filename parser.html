@@ -895,6 +895,117 @@
       }
     }
 
+    class Bitsearch {
+      static absoluteUrl(base, href) {
+        try {
+          return new URL(href, base).toString();
+        } catch {
+          return href || '';
+        }
+      }
+
+      async search(options) {
+        const callHandler = window.flutter_inappwebview?.callHandler;
+        if (!callHandler) throw new Error('flutter_inappwebview not available');
+
+        try {
+          // Parse site model
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || '{}');
+
+          const base = searchSiteModelData.primarySource || 'https://bitsearch.eu';
+          const searchPath = searchSiteModelData.searchPath || '/search?q={SEARCH_QUERY}';
+          const query = options?.query && options.query.length ? options.query : 'book';
+
+          // Build URL
+          const path = searchPath.replace('{SEARCH_QUERY}', encodeURIComponent(query));
+          const url = new URL(path, base).toString();
+
+          // Fetch HTML via Flutter in-app webview bridge
+          const res = await callHandler('curlRequest', {
+            url,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const html = decodeBase64UTF8(res?.data);
+          if (!html) return [];
+
+          // Parse HTML
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+
+          // Each result card holds a single <h3><a href="/torrent/..."> title link
+          const titleLinks = Array.from(doc.querySelectorAll('h3 a[href^="/torrent/"]'));
+          if (!titleLinks.length) return [];
+
+          const results = [];
+
+          for (const aName of titleLinks) {
+            const card = aName.closest('div.bg-white') || aName.closest('div');
+            if (!card) continue;
+
+            const name = (aName.textContent || '').trim().replace(/\s+/g, ' ');
+            const itemUrl = Bitsearch.absoluteUrl(base, aName.getAttribute('href') || '');
+
+            // Category / size / date row:
+            // <span><i class="fas fa-video"></i><span>Other/Video</span></span>
+            // <span><i class="fas fa-download"></i><span>8.44 GB</span></span>
+            // <span><i class="fas fa-calendar"></i><span>7/23/2025</span></span>
+            let type = '';
+            let size = '';
+            let age = '';
+            const statsDiv = card.querySelector('div.text-gray-600');
+            if (statsDiv) {
+              const groups = Array.from(statsDiv.querySelectorAll(':scope > span'));
+              for (const group of groups) {
+                const iconClass = group.querySelector('i')?.className || '';
+                const text = (group.querySelector('span')?.textContent || '').trim();
+                if (iconClass.includes('fa-download')) size = text;
+                else if (iconClass.includes('fa-calendar')) age = text;
+                else if (!type) type = text;
+              }
+            }
+
+            // Swarm stats
+            const seeder = (card.querySelector('span.text-green-600 span.font-medium')?.textContent || '').trim();
+            const leecher = (card.querySelector('span.text-red-600 span.font-medium')?.textContent || '').trim();
+
+            // Links: magnet + .torrent download + detail page
+            const magnetLink = card.querySelector('a[href^="magnet:"]')?.getAttribute('href') || '';
+            const torrentRel = card.querySelector('a[href^="/download/torrent/"]')?.getAttribute('href') || '';
+            const torrentUrl = torrentRel ? Bitsearch.absoluteUrl(base, torrentRel) : '';
+
+            const magnet = [];
+            if (magnetLink) magnet.push(magnetLink);
+            if (torrentUrl) magnet.push(torrentUrl);
+            if (itemUrl) magnet.push(itemUrl);
+
+            const nsfw = (typeof isNSFW === 'function') ? !!isNSFW(name) : false;
+
+            results.push({
+              magnet,
+              source: searchSiteModelData.key || 'bitsearch',
+              age,
+              name,
+              size,
+              seeder,
+              leecher,
+              type,
+              site: searchSiteModelData.siteTitle || 'Bitsearch',
+              parentSite: searchSiteModelData.primarySource || 'https://bitsearch.eu',
+              url: itemUrl,
+              trusted: true,
+              description: '',
+              nsfw
+            });
+          }
+
+          return results;
+        } catch {
+          throw new Error('unable to get data');
+        }
+      }
+    }
+
   </script>
 </body>
 
