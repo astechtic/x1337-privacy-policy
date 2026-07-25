@@ -1086,6 +1086,113 @@
       }
     }
 
+    class Nyaa {
+      static absoluteUrl(base, href) {
+        try {
+          return new URL(href, base).toString();
+        } catch {
+          return href || '';
+        }
+      }
+
+      async search(options) {
+        const callHandler = window.flutter_inappwebview?.callHandler;
+        if (!callHandler) throw new Error('flutter_inappwebview not available');
+
+        try {
+          // Parse site model
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || '{}');
+
+          const base = searchSiteModelData.primarySource || 'https://nyaa.one';
+          const searchPath = searchSiteModelData.searchPath || '/?f=0&c=0_0&q={SEARCH_QUERY}';
+          const query = options?.query && options.query.length ? options.query : 'book';
+
+          // Build URL
+          const path = searchPath.replace('{SEARCH_QUERY}', encodeURIComponent(query));
+          const url = new URL(path, base).toString();
+
+          // Fetch HTML via Flutter in-app webview bridge
+          const res = await callHandler('curlRequest', {
+            url,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const html = decodeBase64UTF8(res?.data);
+          if (!html) return [];
+
+          // Parse HTML
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+
+          const rows = Array.from(doc.querySelectorAll('table tbody tr'));
+          if (!rows.length) return [];
+
+          const results = [];
+
+          for (const tr of rows) {
+            const tds = Array.from(tr.querySelectorAll('td'));
+            if (tds.length < 6) continue;
+
+            // Title link: /view/ anchor that is not a comments link
+            const titleA = Array.from(tr.querySelectorAll('a[href*="/view/"]')).find(
+              a => !(a.getAttribute('class') || '').includes('comments') &&
+                   !(a.getAttribute('href') || '').includes('#comments')
+            );
+            if (!titleA) continue;
+
+            const name = (titleA.getAttribute('title') || titleA.textContent || '')
+              .trim()
+              .replace(/\s+/g, ' ');
+            const itemUrl = Nyaa.absoluteUrl(base, titleA.getAttribute('href') || '');
+
+            // Category from icon alt text, e.g. "Anime - English-translated"
+            const type = (tr.querySelector('img.category-icon')?.getAttribute('alt') || '').trim();
+
+            // Links: magnet + .torrent download
+            const magnetLink = tr.querySelector('a[href^="magnet:"]')?.getAttribute('href') || '';
+            const torrentRel = Array.from(tr.querySelectorAll('a[href]')).find(a =>
+              (a.getAttribute('href') || '').includes('.torrent'))?.getAttribute('href') || '';
+            const torrentUrl = torrentRel ? Nyaa.absoluteUrl(base, torrentRel) : '';
+
+            // Trailing columns: [..., size, date, seeders, leechers, downloads]
+            const size = (tds[tds.length - 5]?.textContent || '').trim();
+            const dateTd = tr.querySelector('td[data-timestamp]');
+            const age = (dateTd?.textContent || tds[tds.length - 4]?.textContent || '').trim();
+            const seeder = (tds[tds.length - 3]?.textContent || '').trim();
+            const leecher = (tds[tds.length - 2]?.textContent || '').trim();
+
+            const magnet = [];
+            if (magnetLink) magnet.push(magnetLink);
+            if (torrentUrl) magnet.push(torrentUrl);
+            if (itemUrl) magnet.push(itemUrl);
+
+            const nsfw = (typeof isNSFW === 'function') ? !!isNSFW(name) : false;
+
+            results.push({
+              magnet,
+              source: searchSiteModelData.key || 'nyaa',
+              age,
+              name,
+              size,
+              seeder,
+              leecher,
+              type,
+              site: searchSiteModelData.siteTitle || 'Nyaa',
+              parentSite: searchSiteModelData.primarySource || 'https://nyaa.one',
+              url: itemUrl,
+              trusted: true,
+              description: '',
+              nsfw
+            });
+          }
+
+          return results;
+        } catch {
+          throw new Error('unable to get data');
+        }
+      }
+    }
+
   </script>
 </body>
 
