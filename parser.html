@@ -1193,6 +1193,154 @@
       }
     }
 
+    class GamesTorrents {
+      static absoluteUrl(base, href) {
+        try {
+          return new URL(href, base).toString();
+        } catch {
+          return href || '';
+        }
+      }
+
+      async search(options) {
+        const callHandler = window.flutter_inappwebview?.callHandler;
+        if (!callHandler) throw new Error('flutter_inappwebview not available');
+
+        try {
+          // Parse site model
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || '{}');
+
+          const base = searchSiteModelData.primarySource || 'https://www.gamestorrents.app';
+          const searchPath = searchSiteModelData.searchPath || '/?s={SEARCH_QUERY}';
+          const query = options?.query && options.query.length ? options.query : 'game';
+
+          // Build URL
+          const path = searchPath.replace('{SEARCH_QUERY}', encodeURIComponent(query));
+          const url = new URL(path, base).toString();
+
+          // Fetch HTML via Flutter in-app webview bridge
+          const res = await callHandler('curlRequest', {
+            url,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const html = decodeBase64UTF8(res?.data);
+          if (!html) return [];
+
+          // Parse HTML
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+
+          // Results are grouped into one block per platform (PC, PS3, WII, ...),
+          // each block holding a table: Nombre | Fecha | Tamaño | Version | Genero | Idioma
+          const blocks = Array.from(doc.querySelectorAll('div.boxedbux'));
+          if (!blocks.length) return [];
+
+          const results = [];
+
+          for (const block of blocks) {
+            const heading = (block.querySelector('.hometitlen')?.textContent || '')
+              .trim()
+              .replace(/\s+/g, ' ');
+            // "Juegos Para PC" -> "PC"
+            const platform = heading.replace(/^Juegos\s+Para\s+/i, '').trim();
+
+            const rows = Array.from(block.querySelectorAll('table tbody tr'));
+
+            for (const tr of rows) {
+              const tds = Array.from(tr.querySelectorAll('td'));
+              if (tds.length < 3) continue;
+
+              const aName = tds[0].querySelector('a[href]');
+              if (!aName) continue;
+
+              const name = (aName.textContent || '').trim().replace(/\s+/g, ' ');
+              const itemUrl = GamesTorrents.absoluteUrl(base, aName.getAttribute('href') || '');
+
+              const age = (tds[1]?.textContent || '').trim();
+              const size = (tds[2]?.textContent || '').trim();
+              const version = (tds[3]?.textContent || '').trim();
+              const genres = (tds[4]?.textContent || '').trim().replace(/\s+/g, ' ');
+
+              // Language column holds one flag image per available language
+              const langs = Array.from(tds[5]?.querySelectorAll('img') || [])
+                .map(img => (img.getAttribute('title') || '').replace(/^Idioma\s+/i, '').trim())
+                .filter(Boolean)
+                .join(', ');
+
+              const descriptionParts = [];
+              if (genres) descriptionParts.push(genres);
+              if (version) descriptionParts.push(version);
+              if (langs) descriptionParts.push(langs);
+
+              const nsfw = (typeof isNSFW === 'function') ? !!isNSFW(name) : false;
+
+              results.push({
+                // The listing has no magnet — getInfo() resolves the .torrent file
+                magnet: itemUrl ? [itemUrl] : [],
+                source: searchSiteModelData.key || 'gamestorrents',
+                age,
+                name,
+                size,
+                seeder: '',
+                leecher: '',
+                type: platform,
+                site: searchSiteModelData.siteTitle || 'GamesTorrents',
+                parentSite: searchSiteModelData.primarySource || 'https://www.gamestorrents.app',
+                url: itemUrl,
+                trusted: true,
+                description: descriptionParts.join(' | '),
+                nsfw
+              });
+            }
+          }
+
+          return results;
+        } catch {
+          throw new Error('unable to get data');
+        }
+      }
+
+      // ---- Get Info: resolve the .torrent file from the detail page ----
+      async getInfo(url, baseUrl, torrentSearchModel, globalVariables) {
+        try {
+          const callHandler = window.flutter_inappwebview?.callHandler;
+          if (!callHandler) return { magnet: [] };
+
+          const torrentSearchModelData = JSON.parse(torrentSearchModel || '{}');
+
+          const base = baseUrl || torrentSearchModelData.parentSite || 'https://www.gamestorrents.app';
+          const pageUrl = url || torrentSearchModelData.url || '';
+          if (!pageUrl) return { magnet: [] };
+
+          const res = await callHandler('curlRequest', {
+            url: pageUrl,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const html = decodeBase64UTF8(res?.data);
+          if (!html) return { magnet: pageUrl ? [pageUrl] : [] };
+
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+
+          const downloadA =
+            doc.querySelector('a#download_torrent') ||
+            doc.querySelector('a[href$=".torrent"]');
+          const torrentRel = downloadA?.getAttribute('href') || '';
+          const torrentUrl = torrentRel ? GamesTorrents.absoluteUrl(base, torrentRel) : '';
+
+          const magnet = [];
+          if (torrentUrl) magnet.push(torrentUrl);
+          if (pageUrl) magnet.push(pageUrl);
+
+          return { magnet };
+        } catch {
+          return { magnet: [] };
+        }
+      }
+    }
+
   </script>
 </body>
 
