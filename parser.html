@@ -1341,6 +1341,121 @@
       }
     }
 
+    class AnimeTosho {
+      static absoluteUrl(base, href) {
+        try {
+          return new URL(href, base).toString();
+        } catch {
+          return href || '';
+        }
+      }
+
+      async search(options) {
+        const callHandler = window.flutter_inappwebview?.callHandler;
+        if (!callHandler) throw new Error('flutter_inappwebview not available');
+
+        try {
+          // Parse site model
+          const searchSiteModelData = JSON.parse(options?.searchSiteModel || '{}');
+
+          const base = searchSiteModelData.primarySource || 'https://animetosho.org';
+          const searchPath = searchSiteModelData.searchPath || '/search?q={SEARCH_QUERY}';
+          const query = options?.query && options.query.length ? options.query : 'anime';
+
+          // Build URL
+          const path = searchPath.replace('{SEARCH_QUERY}', encodeURIComponent(query));
+          const url = new URL(path, base).toString();
+
+          // Fetch HTML via Flutter in-app webview bridge
+          const res = await callHandler('curlRequest', {
+            url,
+            method: 'GET',
+            runInIsolate: true
+          });
+
+          const html = decodeBase64UTF8(res?.data);
+          if (!html) return [];
+
+          // Parse HTML
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+
+          const entries = Array.from(doc.querySelectorAll('div.home_list_entry'));
+          if (!entries.length) return [];
+
+          const results = [];
+
+          for (const entry of entries) {
+            const titleA = entry.querySelector('div.link a[href]');
+            if (!titleA) continue;
+
+            const name = (titleA.textContent || '').trim().replace(/\s+/g, ' ');
+            const itemUrl = AnimeTosho.absoluteUrl(base, titleA.getAttribute('href') || '');
+
+            const size = (entry.querySelector('div.size')?.textContent || '').trim();
+
+            // Prefer the full timestamp from title="Date/time submitted: 16/04/2026 14:22"
+            const dateDiv = entry.querySelector('div.date');
+            const rawDate = dateDiv?.getAttribute('title') || '';
+            const age =
+              rawDate.replace(/^\s*Date\/time submitted:\s*/i, '').trim() ||
+              (dateDiv?.textContent || '').trim();
+
+            // Links: magnet + .torrent download
+            const magnetLink = entry.querySelector('a[href^="magnet:"]')?.getAttribute('href') || '';
+            const torrentRel = Array.from(entry.querySelectorAll('a[href]')).find(a =>
+              (a.getAttribute('href') || '').includes('.torrent'))?.getAttribute('href') || '';
+            const torrentUrl = torrentRel ? AnimeTosho.absoluteUrl(base, torrentRel) : '';
+
+            // Swarm stats live in title="Seeders: 89 / Leechers: 7".
+            // Entries mirrored from AniDex/TokyoTosho have no swarm data at all.
+            let seeder = '';
+            let leecher = '';
+            const swarmSpan = Array.from(entry.querySelectorAll('span[title]')).find(s =>
+              /Seeders:/i.test(s.getAttribute('title') || ''));
+            if (swarmSpan) {
+              const m = (swarmSpan.getAttribute('title') || '')
+                .match(/Seeders:\s*(\d+)\s*\/\s*Leechers:\s*(\d+)/i);
+              if (m) {
+                seeder = m[1];
+                leecher = m[2];
+              }
+            }
+
+            const series = (entry.querySelector('span.serieslink a')?.getAttribute('title') ||
+              entry.querySelector('span.serieslink a')?.textContent || '').trim();
+
+            const magnet = [];
+            if (magnetLink) magnet.push(magnetLink);
+            if (torrentUrl) magnet.push(torrentUrl);
+            if (itemUrl) magnet.push(itemUrl);
+
+            const nsfw = (typeof isNSFW === 'function') ? !!isNSFW(name) : false;
+
+            results.push({
+              magnet,
+              source: searchSiteModelData.key || 'animetosho',
+              age,
+              name,
+              size,
+              seeder,
+              leecher,
+              type: '',
+              site: searchSiteModelData.siteTitle || 'AnimeTosho',
+              parentSite: searchSiteModelData.primarySource || 'https://animetosho.org',
+              url: itemUrl,
+              trusted: true,
+              description: series,
+              nsfw
+            });
+          }
+
+          return results;
+        } catch {
+          throw new Error('unable to get data');
+        }
+      }
+    }
+
   </script>
 </body>
 
