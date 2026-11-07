@@ -1,0 +1,211 @@
+{
+  "version": 2,
+  "ADS_DATA": [],
+  "CONFIG": {
+    "ENABLE_PRO": false,
+    "ENABLE_ADS": false,
+    "SUPPORTING_BUSINESS_AD": {
+      "image": "https://storage.googleapis.com/univest-applications.appspot.com/pn_images/1753757990225_libgen_icon.png",
+      "onImageTapAction": "openUrl",
+      "enable": true,
+      "onImageTapUrl": "https://libgen-rs.weebly.com/dl.html?q=P2FjdGlvbj1yb3V0ZSZ1cmw9aG9tZT9pbmRleD0w"
+    },
+    "BOOK_SEARCH_SITES_DATA": [
+      {
+        "key": "snowfl",
+        "primarySource": "https://snowfl.com",
+        "dataParseClassName": "Snowfl",
+        "siteTitle": "Snowfl",
+        "searchPath": "/",
+        "isEnable": true,
+        "setIntiVariable": true,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://snowfl.com"
+        ]
+      },
+      {
+        "key": "bitsearch",
+        "primarySource": "https://bitsearch.eu",
+        "dataParseClassName": "Bitsearch",
+        "siteTitle": "Bitsearch",
+        "searchPath": "/search?q={SEARCH_QUERY}",
+        "isEnable": true,
+        "setIntiVariable": false,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://bitsearch.eu"
+        ],
+        "categories": {
+          "video": "/search?q={SEARCH_QUERY}&category=2",
+          "app": "/search?q={SEARCH_QUERY}&category=5",
+          "game": "/search?q={SEARCH_QUERY}&category=6",
+          "audio": "/search?q={SEARCH_QUERY}&category=7",
+          "book": "/search?q={SEARCH_QUERY}&category=9"
+        }
+      },
+      {
+        "key": "googlesearch",
+        "primarySource": "https://cse.google.com",
+        "dataParseClassName": "GoogleSearch",
+        "siteTitle": "Google Search",
+        "searchPath": "/",
+        "isEnable": true,
+        "setIntiVariable": true,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://cse.google.com"
+        ]
+      },
+      {
+        "key": "wingsdatabase",
+        "primarySource": "https://db.wingsdatabase.com",
+        "dataParseClassName": "WingsDatabase",
+        "siteTitle": "WingsDatabase",
+        "searchPath": "/3/search/multi?query={SEARCH_QUERY}&include_adult=true&language=en-US&page=1",
+        "isEnable": true,
+        "setIntiVariable": false,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://db.wingsdatabase.com"
+        ]
+      },
+      {
+        "key": "nyaa",
+        "primarySource": "https://nyaa.one",
+        "dataParseClassName": "Nyaa",
+        "siteTitle": "Nyaa",
+        "searchPath": "/?f=0&c=0_0&q={SEARCH_QUERY}",
+        "isEnable": true,
+        "setIntiVariable": false,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://nyaa.one"
+        ],
+        "categories": {
+          "video": "/?f=0&c=1_0&q={SEARCH_QUERY}",
+          "audio": "/?f=0&c=2_0&q={SEARCH_QUERY}",
+          "book": "/?f=0&c=3_0&q={SEARCH_QUERY}",
+          "app": "/?f=0&c=6_1&q={SEARCH_QUERY}",
+          "game": "/?f=0&c=6_2&q={SEARCH_QUERY}"
+        }
+      },
+      {
+        "key": "animetosho",
+        "primarySource": "https://animetosho.org",
+        "dataParseClassName": "AnimeTosho",
+        "siteTitle": "AnimeTosho",
+        "searchPath": "/search?q={SEARCH_QUERY}",
+        "isEnable": true,
+        "setIntiVariable": false,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://animetosho.org"
+        ]
+      },
+      {
+        "key": "gamestorrents",
+        "primarySource": "https://www.gamestorrents.app",
+        "dataParseClassName": "GamesTorrents",
+        "siteTitle": "GamesTorrents",
+        "searchPath": "/?s={SEARCH_QUERY}",
+        "isEnable": true,
+        "setIntiVariable": false,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://www.gamestorrents.app"
+        ]
+      },
+      {
+        "key": "rarbgdump",
+        "primarySource": "https://rarbgdump.com",
+        "dataParseClassName": "RarbgDump",
+        "siteTitle": "RarbgDump",
+        "searchPath": "/search/{SEARCH_QUERY}",
+        "isEnable": false,
+        "setIntiVariable": false,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://rarbgdump.com"
+        ]
+      },
+      {
+        "key": "btdig",
+        "primarySource": "https://btdig.com",
+        "dataParseClassName": "Btdig",
+        "siteTitle": "Btdig",
+        "searchPath": "/search?order=0&q={SEARCH_QUERY}",
+        "isEnable": true,
+        "setIntiVariable": false,
+        "tileHeight": 250,
+        "crossAxisCount": 2,
+        "sources": [
+          "https://btdig.com"
+        ]
+      }
+    ],
+    "TRENDING_QUERIES": [
+      "linux mint 22",
+      "krita 5.3",
+      "big buck bunny",
+      "blender 4.3",
+      "kdenlive"
+    ],
+    "TRENDING_UPDATED_AT": "2026-11-04T05:11:50Z",
+    "WELCOME_EXAMPLES": [
+      {
+        "label": "ubuntu 24.04 iso",
+        "query": "ubuntu 24.04 iso",
+        "type": "ISO"
+      },
+      {
+        "label": "big buck bunny 1080p",
+        "query": "big buck bunny 1080p",
+        "type": "MKV"
+      },
+      {
+        "label": "public domain audiobooks",
+        "query": "librivox audiobook",
+        "type": "MP3"
+      }
+    ],
+    "HOME_CATEGORIES": [
+      {
+        "label": "Linux",
+        "query": "linux iso",
+        "type": "ISO"
+      },
+      {
+        "label": "Software",
+        "query": "portable open source",
+        "type": "APP"
+      },
+      {
+        "label": "Videos",
+        "query": "blender open movie",
+        "type": "MKV"
+      },
+      {
+        "label": "Audio",
+        "query": "creative commons music",
+        "type": "MP3"
+      }
+    ],
+    "FREE_ALERT_LIMIT": 3,
+    "FREE_LINK_OPENS_PER_DAY": 5,
+    "MIN_FULLSCREEN_AD_INTERVAL_SEC": 120,
+    "ENABLE_INTERSTITIAL_ADS": false,
+    "ENABLE_ADS_ON_SEARCH_INIT": false,
+    "ENABLE_ADS_ON_EVERY_SEARCH": false,
+    "ENABLE_ADS_ON_BOOK_DETAILS_INIT": false,
+    "PAYWALL_VARIANT": "default"
+  }
+}
