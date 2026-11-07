@@ -7,7 +7,7 @@
     "SUPPORTING_BUSINESS_AD": {
       "image": "https://storage.googleapis.com/univest-applications.appspot.com/pn_images/1753757990225_libgen_icon.png",
       "onImageTapAction": "openUrl",
-      "enable": true,
+      "enable": false,
       "onImageTapUrl": "https://libgen-rs.weebly.com/dl.html?q=P2FjdGlvbj1yb3V0ZSZ1cmw9aG9tZT9pbmRleD0w"
     },
     "BOOK_SEARCH_SITES_DATA": [
